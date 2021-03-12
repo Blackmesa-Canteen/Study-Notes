@@ -924,3 +924,207 @@ Model, View, Controller 模型视图控制器
 - 控制视图跳转
 
 > Login->接受登陆请求-》处理用户请求（获取用户参数）-〉交给业务层处理登陆业务（判断密码处理业务：saction）->Dao层查询用户名和密码
+
+## 9.3 Filter
+
+Filter: 过滤器，用来过滤网站数据。
+
+开发步骤：
+
+- 导包
+
+  ```xml
+  <dependencies>
+          <dependency>
+              <groupId>javax.servlet</groupId>
+              <artifactId>servlet-api</artifactId>
+              <version>2.5</version>
+          </dependency>
+          <dependency>
+              <groupId>javax.servlet.jsp</groupId>
+              <artifactId>javax.servlet.jsp-api</artifactId>
+              <version>2.3.3</version>
+          </dependency>
+          <!-- JSTL 表达式的依赖 -->
+          <dependency>
+              <groupId>javax.servlet.jsp.jstl</groupId>
+              <artifactId>jstl-api</artifactId>
+              <version>1.2</version>
+          </dependency>
+          <!-- standard标签库 -->
+          <dependency>
+              <groupId>taglibs</groupId>
+              <artifactId>standard</artifactId>
+              <version>1.1.2</version>
+          </dependency>
+  
+          <!-- database -->
+          <dependency>
+              <groupId>mysql</groupId>
+              <artifactId>mysql-connector-java</artifactId>
+              <version>8.0.22</version>
+          </dependency>
+      </dependencies>
+  ```
+
+- 写过滤器
+
+```java
+// 要implement javax.servlet 里面的filter
+public class CharacterEncodingFilter implements Filter {
+
+    // web服务器启动，过滤器创建
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {
+        System.out.println("Filter已经初始化");
+    }
+
+    /*
+    * 1 过滤器中的所有代码，在过滤特定请求时都会执行
+    * 2 必须让过滤器chain继续通行
+    * */
+    @Override
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+        servletRequest.setCharacterEncoding("utf-8");
+        servletResponse.setCharacterEncoding("utf-8");
+        servletResponse.setContentType("text/html;charset=UTF-8");
+
+        System.out.println("Filter执行前...");
+        // 让请求继续走下去，不写这句话，程序会被拦截
+        filterChain.doFilter(servletRequest, servletResponse);
+        System.out.println("Filter执行后...");
+    }
+
+    // web服务器关闭，过滤器销毁
+    @Override
+    public void destroy() {
+        System.out.println("Filter已经销毁");
+    }
+}
+```
+
+```java
+// 来个需要被过滤的请求吧
+public class ShowServlet extends HttpServlet {
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+
+
+        // 直接显示，会乱码，要加
+        // resp.setCharacterEncoding("utf-8");
+        // 但是如果servlet多了，挺麻烦, 可用过滤器
+        resp.getWriter().write("哼哼哼");
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        doGet(req, resp);
+    }
+}
+```
+
+==别忘了在web.xml里注册==
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+         version="4.0">
+
+    <servlet>
+        <servlet-name>ShowServlet</servlet-name>
+        <servlet-class>com.learn.servlet.ShowServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>ShowServlet</servlet-name>
+        <url-pattern>/servlet/show</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>ShowServlet</servlet-name>
+        <url-pattern>/show</url-pattern>
+    </servlet-mapping>
+
+    <filter>
+        <filter-name>CharacterEncodingFilter</filter-name>
+        <filter-class>com.learn.filter.CharacterEncodingFilter</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>CharacterEncodingFilter</filter-name>
+        <!-- 只要是/servlet 的任何请求，都会经过此过滤器 -->
+        <url-pattern>/servlet/*</url-pattern>
+    </filter-mapping>
+
+</web-app>
+```
+
+## 9.4 监听器
+
+GUI里大量应用
+
+- 实现监听器的接口
+
+```java
+public class OnlineCountListener implements HttpSessionListener {
+
+    // 一旦session创建，就会触发在这个。 观察者模式
+    @Override
+    public void sessionCreated(HttpSessionEvent httpSessionEvent) {
+        ServletContext servletContext = httpSessionEvent.getSession().getServletContext();
+        Integer onlineCount = (Integer)servletContext.getAttribute("OnlineCount");
+
+        if (onlineCount == null) {
+            onlineCount = 1;
+        } else {
+            int count = onlineCount;
+            onlineCount = count + 1;
+        }
+
+        servletContext.setAttribute("OnlineCount", onlineCount);
+    }
+
+    @Override
+    public void sessionDestroyed(HttpSessionEvent httpSessionEvent) {
+        ServletContext servletContext = httpSessionEvent.getSession().getServletContext();
+        Integer onlineCount = (Integer)servletContext.getAttribute("OnlineCount");
+
+        if (onlineCount == null) {
+            onlineCount = 0;
+        } else {
+            int count = onlineCount;
+            onlineCount = count - 1;
+        }
+
+        servletContext.setAttribute("OnlineCount", onlineCount);
+    }
+}
+```
+
+- 注册监听器
+
+```xml
+<!-- 注册监听器 -->
+    <listener>
+       <listener-class>com.learn.listener.OnlineCountListener</listener-class>
+    </listener>
+```
+
+- 首页实验
+
+```html
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<html>
+  <head>
+    <title>$Title$</title>
+  </head>
+  <body>
+  <h1>当前有<span><%=session.getServletContext().getAttribute("OnlineCount")%></span></h1>
+  </body>
+
+</html>
+```
+
+## 9.5 过滤器监听器常见应用
+
+
+
