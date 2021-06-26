@@ -1126,5 +1126,281 @@ public class OnlineCountListener implements HttpSessionListener {
 
 ## 9.5 过滤器监听器常见应用
 
+### 权限拦截
 
+LoginServlet
+
+```java
+public class LoginServlet extends HttpServlet {
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        // 获取请求的参数
+        String username = req.getParameter("username");
+
+        if (username.equals("admin")) {
+
+            // 删掉登陆状态建议只删除对应属性。
+            // 删除session，以后再创建费性能。要做到session复用
+            HttpSession session = req.getSession();
+            session.setAttribute("USER_SESSION", session.getId());
+            resp.sendRedirect("/sys/success.jsp");
+        } else {
+            resp.sendRedirect("/sys/error.jsp");
+        }
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        doGet(req, resp);
+    }
+}
+```
+
+LogoutServlet
+
+```java
+public class LogoutServlet extends HttpServlet {
+
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        HttpSession session = req.getSession();
+        Object user_session = session.getAttribute("USER_SESSION");
+        if (user_session != null) {
+            session.removeAttribute("USER_SESSION");
+            resp.sendRedirect("/login.jsp");
+        } else {
+            resp.sendRedirect("/login.jsp");
+        }
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        doGet(req, resp);
+    }
+}
+```
+
+SysFilter
+
+```java
+public class SysFilter implements Filter {
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException {
+
+    }
+
+    @Override
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+
+        HttpServletRequest req = (HttpServletRequest) servletRequest;
+        HttpServletResponse resp = (HttpServletResponse) servletResponse;
+
+        Object user_session = req.getSession().getAttribute("USER_SESSION");
+
+        if(user_session == null) {
+            // 如果发现访问sys目录下文件没有session对应属性
+            // 返回登陆页
+            resp.sendRedirect("/login.jsp");
+        }
+
+        // 先写这个，免得过滤器不往下走
+        filterChain.doFilter(servletRequest, servletResponse);
+    }
+
+    @Override
+    public void destroy() {
+
+    }
+}
+```
+
+Web.xml
+
+```xml
+ <!-- 页面权限过滤 -->
+    <servlet>
+        <servlet-name>LoginServlet</servlet-name>
+        <servlet-class>com.learn.servlet.LoginServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>LoginServlet</servlet-name>
+        <url-pattern>/servlet/login</url-pattern>
+    </servlet-mapping>
+
+    <servlet>
+        <servlet-name>LogoutServlet</servlet-name>
+        <servlet-class>com.learn.servlet.LogoutServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>LogoutServlet</servlet-name>
+        <url-pattern>/servlet/logout</url-pattern>
+    </servlet-mapping>
+
+    <filter>
+        <filter-name>SysFilter</filter-name>
+        <filter-class>com.learn.filter.SysFilter</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>SysFilter</filter-name>
+        <!-- 只要是/sys 的任何请求，都会经过此过滤器 -->
+        <url-pattern>/sys/*</url-pattern>
+    </filter-mapping>
+```
+
+login.jsp
+
+```html
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<html>
+<head>
+    <title>login</title>
+</head>
+<body>
+
+<!-- 登陆请求提交到 /servlet/login 这个pattern，对应一个servlet -->
+<form action="/servlet/login" method="post">
+    <input type="text" name="username">
+    <input type="password" name="password">
+    <input type="submit">
+</form>
+</body>
+</html>
+```
+
+error.jsp
+
+```html
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<html>
+<head>
+    <title>error</title>
+</head>
+<body>
+<h1>用户名错了啊</h1>
+<hr>
+<a href="/login.jsp">回登陆夜</a>
+</body>
+</html>
+```
+
+Success.jsp
+
+```html
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<html>
+<head>
+    <title>ieyi9</title>
+</head>
+<body>
+<%--
+<%
+    // 蠢蛋方法：通过jsp实现如果没对应session就跳回去
+    Object user_session = request.getSession().getAttribute("USER_SESSION");
+    if (user_session == null) {
+        response.sendRedirect("/login.jsp");
+    }
+%>
+--%>
+<h1>访问成功了！</h1>
+<hr>
+<h1>这是主页鸭</h1>
+
+<p><a href="/servlet/logout">注销吧</a></p>
+</body>
+</html>
+```
+
+
+
+# 10 JDBC 回顾
+
+Java DataBase Connectivity
+
+## 10.1 MySQL的
+
+maven导入jdbc坐标
+
+```xml
+<dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>8.0.22</version>
+</dependency>
+```
+
+步骤
+
+```java
+public static void main(String[] args) throws ClassNotFoundException, SQLException {
+        // 解决中文乱码，时间戳
+        String url = "jdbc:mysql://localhost:3306/test_demo?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+        String username = "root";
+        String password = "root";
+
+        // 加载驱动
+        Class.forName("com.mysql.cj.jdbc.Driver");
+
+        // 连接数据库
+        Connection connection = DriverManager.getConnection(url, username, password);
+
+        // 向数据库发送SQL对象statement
+        Statement statement = connection.createStatement();
+
+        // 编写SQL
+        String sql = "SELECT * FROM account;";
+
+        // 执行SQL，查，返回结果集
+        ResultSet resultSet = statement.executeQuery(sql);
+  			// 写SQL,增删改，返回受影响的行数
+        // String sql = "DELETE FROM account WHERE id = 4;";
+        // int i = statement.executeUpdate(sql);
+        // 写带占位符SQL
+        // String sql = "INSERT INTO account(id, name, money) VALUES (?, ?, ?);"
+  			// 预编译
+        // PreparedStatement preparedStatement = connection.prepareStatement(sql);
+        // preparedStatement.setInt(1, 6);
+        // preparedStatement.setString(2, "Tom");
+        // preparedStatement.setInt(3, 233);
+        // 预编译SQL后进行执行
+        // int i = preparedStatement.executeUpdate(sql);
+
+        // 遍历结果集
+        while (resultSet.next()) {
+            System.out.println("id=" + resultSet.getObject("id"));
+            System.out.println("name=" + resultSet.getObject("name"));
+            System.out.println("money=" + resultSet.getObject("money"));
+            System.out.println("-------------------------------");
+        }
+
+        // 必须要关闭数据库连接
+        resultSet.close();
+        statement.close();
+        connection.close();
+    }
+```
+
+## 10.2 Transaction
+
+ACID: 原子性，一致性，隔离性，持久性。保证数据安全。
+
+>开启、commit、rollback、关闭
+
+```java
+ // 解决中文乱码，时间戳
+        String url = "jdbc:mysql://localhost:3306/test_demo?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+        String username = "root";
+        String password = "root";
+
+        // 加载驱动
+        Class.forName("com.mysql.cj.jdbc.Driver");
+
+        // 连接数据库
+        Connection connection = DriverManager.getConnection(url, username, password);
+
+        // 开启Transaction
+        connection.setAutoCommit(false);
+        
+        //  一通操作
+        connection.commit();
+```
 
